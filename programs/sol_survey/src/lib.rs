@@ -89,34 +89,38 @@ pub mod sol_survey {
         survey.current_participants_count += 1;
         Ok(())
     }
-    pub fn submit_survey_as_participant(ctx: Context<SubmitSurveyAsParticipant>, user_id: u64) -> Result<()> {
+    pub fn submit_survey_as_participant(ctx: Context<SubmitSurveyAsParticipant>, form_submission_uri: String) -> Result<()> {
         let participation = &mut ctx.accounts.participation;
         let user = &mut ctx.accounts.user;
-        if user.key() == participation.participant_address {
+        // if user.key() == participation.participant_address {
             // TODO: Check for validity of survey
 
             participation.completed = true;
-        } else {
+            participation.form_submission_uri = form_submission_uri;
+        // } else {
             // TODO: ERROR
-        }
+        // }
         Ok(())
     }
-    pub fn claim_survey_reward(ctx: Context<SubmitSurveyAsParticipant>) -> Result<()> {
+    pub fn claim_survey_reward(ctx: Context<SubmitSurveyAsParticipant>, user_id: u64) -> Result<()> {
         let participation = &mut ctx.accounts.participation;
         let survey = &mut ctx.accounts.survey;
         let user = &mut ctx.accounts.user;
-        if user.key() == participation.participant_address {
+        // if user.key() == participation.participant_address {
             // TODO: Check for survey completed status
 
             // TODO: release Funds
+            transfer_service_fee_lamports(&survey.to_account_info(), user, survey.reward_per_participant)?;
 
             // Mark reward status to true
             participation.rewarded = true;
-        } else {
+            
+        // } else {
             // TODO: ERROR
-        }
+        // }
         Ok(())
     }
+    
     pub fn sign_up_user(
         ctx: Context<SignUpUser>,
         bump: u8,
@@ -148,6 +152,20 @@ pub mod sol_survey {
     pub fn upgrade_tier(ctx: Context<UpgradeTier>) -> Result<()> {
         Ok(())
     }
+}
+
+fn transfer_service_fee_lamports(
+    from_account: &AccountInfo,
+    to_account: &AccountInfo,
+    amount_of_lamports: u64,
+) -> Result<()> {
+    // Does the from account have enough lamports to transfer?
+    require!(**from_account.try_borrow_lamports()? > amount_of_lamports, SurveyError::InsufficientFundsForTransaction);
+
+    // Debit from_account and credit to_account
+    **from_account.try_borrow_mut_lamports()? -= amount_of_lamports;
+    **to_account.try_borrow_mut_lamports()? += amount_of_lamports;
+    Ok(())
 }
 
 #[derive(Accounts)]
@@ -347,6 +365,7 @@ pub struct Participation {
     pub survey_id: u64,
     pub completed: bool,
     pub rewarded: bool,
+    pub form_submission_uri: String
 }
 
 #[account]
@@ -355,4 +374,11 @@ pub struct FundLocker {
     pub lock_date: u64,
     pub release_date: u64,
     pub user_id: u64,
+}
+
+#[error_code]
+pub enum SurveyError {
+
+    #[msg("Claim Failed! Insufficiant funds.")]
+    InsufficientFundsForTransaction,
 }
